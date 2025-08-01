@@ -76,23 +76,51 @@
             border-left: 5px solid #1abc9c;
             text-align: center;
         }
-
+        
         .data-loader h2 {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            color: #2c3e50;
         }
         
-        #fileStatus {
-            margin-top: 15px;
+        .status-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .file-status {
             font-style: italic;
             color: #555;
+            font-size: 0.9em;
+            padding: 5px 15px;
+            border-radius: 20px;
+            background: #e0e6ec;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
+        .file-status.loading {
+            color: #2980b9;
+            background: #d4e6f1;
+        }
+        
+        .file-status.loaded {
+            color: #27ae60;
+            background: #d4f1d4;
+        }
+        
+        .file-status.error {
+            color: #e74c3c;
+            background: #f8d7da;
+        }
+
         .input-section {
             background: #f8f9fa;
             border-radius: 12px;
             padding: 30px;
             margin-bottom: 30px;
-            border-left: 5px solid #3498db;
+            border-left: 5-px solid #3498db;
         }
 
         .section-title {
@@ -330,7 +358,10 @@
         <form class="calculator-form" id="calculatorForm">
             <div class="data-loader">
                 <h2>Data Status</h2>
-                <p id="fileStatus">Please select a material type to load data.</p>
+                <div class="status-container">
+                    <div id="statusA" class="file-status">Factor A: Loading...</div>
+                    <div id="statusB" class="file-status">Factor B: Awaiting selection...</div>
+                </div>
             </div>
 
             <div class="input-section">
@@ -419,26 +450,30 @@
 
     <script>
         // --- GLOBAL DATA STORE ---
-        // This is where you will store the parsed data from the Excel files.
-        let factorA_Data, factorB_CS1_Data, factorB_CS2_Data, factorB_HA1_Data;
+        let factorA_Data = null;
+        let factorB_Data = null;
 
-        // Configuration for the GitHub repository.
-        // **IMPORTANT:** Replace these with your actual details.
-        const GITHUB_USER = 'ueapan';
-        const GITHUB_REPO = 'Factor-A-B-calculation';
-        const GITHUB_BRANCH = 'main'; // Or 'master', or your branch name.
-        const GITHUB_DATA_PATH = 'excel_data'; // The folder where your files are.
-        const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
+        // --- GITHUB RAW FILE URLS ---
+        // IMPORTANT: Replace the placeholder URL with your actual GitHub raw repository path.
+        const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/ueapan/Factor-A-B-calculation/main/excel_data';
+        const DATA_URLS = {
+            'A': GITHUB_BASE_URL + 'Factor%20A.xlsx%20-%20Sheet1.csv',
+            'B-CS-1': GITHUB_BASE_URL + 'Factor%20B-CS-1.xlsx%20-%20Sheet1-Filled.csv',
+            'B-CS-2': GITHUB_BASE_URL + 'Factor%20B-CS-2.xlsx%20-%20Sheet1-Filled.csv',
+            'B-HA-1': GITHUB_BASE_URL + 'Factor%20B-HA-1.xlsx%20-%20Sheet1-Filled.csv',
+        };
 
         // --- EVENT LISTENERS ---
         document.getElementById('materialType').addEventListener('change', async function() {
-            // This function is now async because we are using fetch.
             updateMaterialInfo();
             const materialType = this.value;
-            // Only try to load data if a material is actually selected.
             if (materialType) {
-                await loadDataForMaterial(materialType);
+                await loadFactorBData(materialType);
+            } else {
+                factorB_Data = null;
+                updateStatus('B', 'Awaiting selection...', '');
             }
+            checkCalculationReadiness();
         });
 
         document.getElementById('calculatorForm').addEventListener('submit', function(e) {
@@ -446,108 +481,86 @@
             calculateFactors();
         });
 
-        // --- DATA LOADING AND PARSING FUNCTIONS ---
-        // This function now replaces the file input listener.
-        async function loadDataForMaterial(materialType) {
-            const fileStatus = document.getElementById('fileStatus');
-            const calculateBtn = document.getElementById('calculateBtn');
-            calculateBtn.disabled = true;
-            fileStatus.textContent = 'Loading data... Please wait.';
-            
-            // --- FIX: Using encodeURIComponent for robust URL construction ---
-            // This ensures that special characters like spaces are properly handled.
-            const fileA_name = encodeURIComponent('Factor A.xlsx');
-            const fileB_name = encodeURIComponent(`Factor B-${materialType}.xlsx`);
-            
-            const fileA_url = `${GITHUB_RAW_URL}/${fileA_name}`;
-            const fileB_url = `${GITHUB_RAW_URL}/${fileB_name}`;
+        // --- DATA FETCHING AND PARSING ---
+        async function fetchAndParseData(url, dataType) {
+            const statusElement = document.getElementById(`status${dataType}`);
+            updateStatus(dataType, 'Loading...', 'loading');
 
             try {
-                const [responseA, responseB] = await Promise.all([
-                    fetch(fileA_url),
-                    fetch(fileB_url)
-                ]);
-
-                // Check for 404 errors explicitly
-                if (!responseA.ok || !responseB.ok) {
-                    let errorMessage = 'Failed to load one or more files from GitHub.';
-                    if (!responseA.ok) errorMessage += `\nError with Factor A.xlsx (Status: ${responseA.status})`;
-                    if (!responseB.ok) errorMessage += `\nError with Factor B-${materialType}.xlsx (Status: ${responseB.status}).`;
-                    errorMessage += `\n\n**Please check that the filenames and folder structure on your GitHub repository exactly match the names in the code.**`;
-                    throw new Error(errorMessage);
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const csvText = await response.text();
+                const workbook = XLSX.read(csvText, { type: 'string' });
 
-                const [arrayBufferA, arrayBufferB] = await Promise.all([
-                    responseA.arrayBuffer(),
-                    responseB.arrayBuffer()
-                ]);
-
-                // Parse the Factor A file once.
-                if (!factorA_Data) {
-                    const workbookA = XLSX.read(new Uint8Array(arrayBufferA), { type: 'array' });
-                    // Fix: Added try-catch for parsing to handle invalid file content
-                    try {
-                        factorA_Data = parseFactorAData(workbookA);
-                    } catch (parseError) {
-                        throw new Error(`Error parsing Factor A.xlsx: ${parseError.message}`);
-                    }
+                if (workbook.SheetNames.length === 0) {
+                    throw new Error('File contains no sheets.');
                 }
-
-                // Parse the specific Factor B file based on material.
-                const workbookB = XLSX.read(new Uint8Array(arrayBufferB), { type: 'array' });
-                try {
-                    if (materialType === 'CS-1') {
-                        factorB_CS1_Data = parseFactorBData(workbookB);
-                    } else if (materialType === 'CS-2') {
-                        factorB_CS2_Data = parseFactorBData(workbookB);
-                    } else if (materialType === 'HA-1') {
-                        factorB_HA1_Data = parseFactorBData(workbookB);
-                    }
-                } catch (parseError) {
-                    throw new Error(`Error parsing Factor B-${materialType}.xlsx: ${parseError.message}`);
-                }
-
-                fileStatus.innerHTML = `Data for <strong>${materialType}</strong> loaded. Ready to calculate.`;
-                fileStatus.style.color = '#27ae60';
-                calculateBtn.disabled = false;
+                
+                const data = (dataType === 'A') ? parseFactorAData(workbook) : parseFactorBData(workbook);
+                updateStatus(dataType, 'Loaded', 'loaded');
+                return data;
             } catch (error) {
-                console.error('Error fetching or parsing data:', error);
-                fileStatus.textContent = `Error loading data for ${materialType}: ${error.message}`;
-                fileStatus.style.color = '#e74c3c';
+                console.error(`Error fetching or parsing data for Factor ${dataType}:`, error);
+                updateStatus(dataType, `Error: ${error.message}`, 'error');
+                return null;
             }
         }
         
-        // --- FIX: Added a check for empty or invalid data array. ---
+        async function loadFactorBData(materialType) {
+            const url = DATA_URLS[`B-${materialType}`];
+            factorB_Data = await fetchAndParseData(url, 'B');
+        }
+
+        // --- Parses Factor A data from the workbook. Now looks for the first sheet (index 0).
         function parseFactorAData(workbook) {
-            const sheet = workbook.Sheets[workbook.SheetNames[1]]; // Assuming Sheet 2
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            // Validate that the parsed data is a non-empty array with at least two rows.
             if (!Array.isArray(json) || json.length < 2) {
                 throw new Error('Parsed data is empty or malformed. Expecting at least two rows of data.');
             }
+            
             const ld_headers = json[0].slice(1).map(h => parseFloat(h));
             const rows = json.slice(1).map(row => ({
                 dt: parseFloat(row[0]),
                 values: row.slice(1).map(v => parseFloat(v))
             }));
+            
             return { ld_headers, rows };
         }
 
-        // --- FIX: Added a check for empty or invalid data array. ---
+        // --- Parses Factor B data from the workbook. Now looks for the first sheet (index 0).
         function parseFactorBData(workbook) {
-            const sheet = workbook.Sheets[workbook.SheetNames[0]]; // Assuming Sheet 1
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            // Validate that the parsed data is a non-empty array with at least two rows.
             if (!Array.isArray(json) || json.length < 2) {
                 throw new Error('Parsed data is empty or malformed. Expecting at least two rows of data.');
             }
+            
             const factorA_headers = json[0].slice(1).map(h => parseFloat(h));
             const rows = json.slice(1).map(row => ({
                 temp: parseFloat(row[0]),
                 values: row.slice(1).map(v => parseFloat(v))
             }));
+            
             return { factorA_headers, rows };
         }
 
         // --- UI FUNCTIONS ---
+        function updateStatus(type, text, className) {
+            const statusElement = document.getElementById(`status${type}`);
+            const prefix = `Factor ${type}: `;
+            statusElement.textContent = prefix + text;
+            statusElement.className = `file-status ${className}`;
+        }
+        
         function updateMaterialInfo() {
             const materialType = document.getElementById('materialType').value;
             const infoElement = document.getElementById('materialInfo');
@@ -559,6 +572,14 @@
             infoElement.textContent = materialInfos[materialType] || '';
         }
 
+        // --- Checks if both Factor A and Factor B data are loaded and a material is selected.
+        function checkCalculationReadiness() {
+            const materialType = document.getElementById('materialType').value;
+            const calculateBtn = document.getElementById('calculateBtn');
+            const isReady = factorA_Data && factorB_Data && materialType;
+            calculateBtn.disabled = !isReady;
+        }
+
         // --- MAIN CALCULATION CONTROLLER ---
         function calculateFactors() {
             const materialType = document.getElementById('materialType').value;
@@ -568,22 +589,18 @@
             const temp = parseFloat(document.getElementById('temperature').value);
 
             if (validateInputs(materialType, od, th, len, temp)) {
-                let factors;
-                if (materialType === 'CS-1') {
-                    factors = calculateFactorAB_CS1(od, th, len, temp);
-                } else if (materialType === 'CS-2') {
-                    factors = calculateFactorAB_CS2(od, th, len, temp);
-                } else if (materialType === 'HA-1') {
-                    factors = calculateFactorAB_HA1(od, th, len, temp);
-                } else {
-                    showWarning(`Calculation for material type '${materialType}' is not implemented.`);
-                    document.getElementById('results').classList.remove('show');
-                    return;
-                }
+                const resultA = calculateFactorA(od, th, len);
+                if (!resultA) return;
+
+                const factors = calculateFactorB(materialType, resultA.factorA, temp);
+                if (!factors) return;
                 
-                if (factors) {
-                    displayResults(materialType, od, th, len, temp, factors);
-                }
+                displayResults(materialType, od, th, len, temp, {
+                    factorA: resultA.factorA,
+                    factorB: factors.factorB,
+                    dt_ratio: resultA.dt_ratio,
+                    ld_ratio: resultA.ld_ratio
+                });
             }
         }
 
@@ -608,6 +625,7 @@
             
             if (!y_upper_row || !y_lower_row) {
                 console.error("Could not find interpolation bounds for Y-value.");
+                showWarning("Input value is outside the data range for interpolation.");
                 return null;
             }
 
@@ -634,7 +652,6 @@
         }
 
         // --- MATERIAL-SPECIFIC CALCULATION FUNCTIONS ---
-
         function calculateFactorA(od, thickness, length) {
             let input_dt = od / thickness;
             let input_ld = length / od;
@@ -642,110 +659,50 @@
             if (input_ld < 0.05) input_ld = 0.05;
             if (input_ld > 50) input_ld = 50;
 
-            // Ensure the data exists before trying to interpolate
             if (!factorA_Data) {
                 showWarning('Factor A data is not loaded.');
                 return null;
             }
 
+            const factorA_val = interpolate2D(input_ld, input_dt, {
+                x_headers: factorA_Data.ld_headers,
+                y_key: 'dt',
+                rows: factorA_Data.rows
+            });
+
             return {
-                factorA: interpolate2D(input_ld, input_dt, {
-                    x_headers: factorA_Data.ld_headers,
-                    y_key: 'dt',
-                    rows: factorA_Data.rows
-                }),
+                factorA: factorA_val,
                 dt_ratio: input_dt,
                 ld_ratio: input_ld
             };
         }
 
-        function calculateFactorAB_CS1(od, thickness, length, temperature) {
-            const resultA = calculateFactorA(od, thickness, length);
-            if (resultA.factorA === null) return null;
-
-            let input_temp_f = (temperature * 9 / 5) + 32;
-
-            if (input_temp_f < 300) input_temp_f = 300;
-            if (input_temp_f > 900) input_temp_f = 900;
-            
-            if (!factorB_CS1_Data) {
-                showWarning('Factor B (CS-1) data is not loaded.');
+        function calculateFactorB(materialType, factorA_val, temperature) {
+            if (!factorB_Data) {
+                showWarning('Factor B data is not loaded.');
                 return null;
             }
 
-            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
-                x_headers: factorB_CS1_Data.factorA_headers,
-                y_key: 'temp',
-                rows: factorB_CS1_Data.rows
-            });
-
-            if (factorB_raw === null) return null;
-
-            return {
-                factorA: resultA.factorA,
-                factorB: factorB_raw / 14.223,
-                dt_ratio: resultA.dt_ratio,
-                ld_ratio: resultA.ld_ratio
-            };
-        }
-
-        function calculateFactorAB_CS2(od, thickness, length, temperature) {
-            const resultA = calculateFactorA(od, thickness, length);
-            if (resultA.factorA === null) return null;
-
             let input_temp_f = (temperature * 9 / 5) + 32;
 
-            if (input_temp_f < 300) input_temp_f = 300;
-            if (input_temp_f > 900) input_temp_f = 900;
-            
-            if (!factorB_CS2_Data) {
-                showWarning('Factor B (CS-2) data is not loaded.');
-                return null;
+            if (materialType === 'CS-1' || materialType === 'CS-2') {
+                if (input_temp_f < 300) input_temp_f = 300;
+                if (input_temp_f > 900) input_temp_f = 900;
+            } else if (materialType === 'HA-1') {
+                if (input_temp_f < 100) input_temp_f = 100;
+                if (input_temp_f > 1500) input_temp_f = 1500;
             }
 
-            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
-                x_headers: factorB_CS2_Data.factorA_headers,
+            const factorB_raw = interpolate2D(factorA_val, input_temp_f, {
+                x_headers: factorB_Data.factorA_headers,
                 y_key: 'temp',
-                rows: factorB_CS2_Data.rows
-            });
-
-            if (factorB_raw === null) return null;
-
-            return {
-                factorA: resultA.factorA,
-                factorB: factorB_raw / 14.223,
-                dt_ratio: resultA.dt_ratio,
-                ld_ratio: resultA.ld_ratio
-            };
-        }
-
-        function calculateFactorAB_HA1(od, thickness, length, temperature) {
-            const resultA = calculateFactorA(od, thickness, length);
-            if (resultA.factorA === null) return null;
-
-            let input_temp_f = (temperature * 9 / 5) + 32;
-
-            if (input_temp_f < 100) input_temp_f = 100;
-            if (input_temp_f > 1500) input_temp_f = 1500;
-            
-            if (!factorB_HA1_Data) {
-                showWarning('Factor B (HA-1) data is not loaded.');
-                return null;
-            }
-
-            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
-                x_headers: factorB_HA1_Data.factorA_headers,
-                y_key: 'temp',
-                rows: factorB_HA1_Data.rows
+                rows: factorB_Data.rows
             });
             
             if (factorB_raw === null) return null;
 
             return {
-                factorA: resultA.factorA,
-                factorB: factorB_raw / 14.223,
-                dt_ratio: resultA.dt_ratio,
-                ld_ratio: resultA.ld_ratio
+                factorB: factorB_raw / 14.223
             };
         }
 
@@ -756,6 +713,9 @@
 
             if (!materialType) {
                 warningMessage = 'Please select a material type.';
+                isValid = false;
+            } else if (!factorA_Data || !factorB_Data) {
+                 warningMessage = 'Data is still loading or failed to load. Please wait or check the console for errors.';
                 isValid = false;
             } else if (od <= 0) {
                 warningMessage = 'Outside diameter must be greater than 0.';
@@ -812,8 +772,17 @@
             document.getElementById('results').classList.add('show');
         }
 
-        // Initialize UI
-        updateMaterialInfo();
+        // --- INITIALIZATION ---
+        async function initialize() {
+            // Load Factor A data immediately on page load
+            factorA_Data = await fetchAndParseData(DATA_URLS.A, 'A');
+            checkCalculationReadiness();
+            updateMaterialInfo();
+        }
+
+        // Start the application
+        initialize();
+
     </script>
 </body>
 </html>
