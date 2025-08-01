@@ -424,7 +424,7 @@
 
         // Configuration for the GitHub repository.
         // **IMPORTANT:** Replace these with your actual details.
-        const GITHUB_USER = 'Ueapan';
+        const GITHUB_USER = 'ueapan';
         const GITHUB_REPO = 'Factor-A-B-calculation';
         const GITHUB_BRANCH = 'main'; // Or 'master', or your branch name.
         const GITHUB_DATA_PATH = 'excel_data'; // The folder where your files are.
@@ -453,9 +453,14 @@
             const calculateBtn = document.getElementById('calculateBtn');
             calculateBtn.disabled = true;
             fileStatus.textContent = 'Loading data... Please wait.';
-
-            const fileA_url = `${GITHUB_RAW_URL}/Factor A.xlsx`;
-            const fileB_url = `${GITHUB_RAW_URL}/Factor B-${materialType}.xlsx`;
+            
+            // --- FIX: Using encodeURIComponent for robust URL construction ---
+            // This ensures that special characters like spaces are properly handled.
+            const fileA_name = encodeURIComponent('Factor A.xlsx');
+            const fileB_name = encodeURIComponent(`Factor B-${materialType}.xlsx`);
+            
+            const fileA_url = `${GITHUB_RAW_URL}/${fileA_name}`;
+            const fileB_url = `${GITHUB_RAW_URL}/${fileB_name}`;
 
             try {
                 const [responseA, responseB] = await Promise.all([
@@ -463,8 +468,13 @@
                     fetch(fileB_url)
                 ]);
 
+                // Check for 404 errors explicitly
                 if (!responseA.ok || !responseB.ok) {
-                    throw new Error(`Failed to load one or more files from GitHub. Status: ${responseA.status}, ${responseB.status}`);
+                    let errorMessage = 'Failed to load one or more files from GitHub.';
+                    if (!responseA.ok) errorMessage += `\nError with Factor A.xlsx (Status: ${responseA.status})`;
+                    if (!responseB.ok) errorMessage += `\nError with Factor B-${materialType}.xlsx (Status: ${responseB.status}).`;
+                    errorMessage += `\n\n**Please check that the filenames and folder structure on your GitHub repository exactly match the names in the code.**`;
+                    throw new Error(errorMessage);
                 }
 
                 const [arrayBufferA, arrayBufferB] = await Promise.all([
@@ -493,7 +503,7 @@
                 calculateBtn.disabled = false;
             } catch (error) {
                 console.error('Error fetching or parsing data:', error);
-                fileStatus.textContent = `Error loading data for ${materialType}. Please check the console.`;
+                fileStatus.textContent = `Error loading data for ${materialType}. See console for details.`;
                 fileStatus.style.color = '#e74c3c';
             }
         }
