@@ -260,6 +260,28 @@
             text-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+
+        .results-table th, .results-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            text-align: left;
+        }
+
+        .results-table th {
+            font-weight: 700;
+            background: rgba(255,255,255,0.15);
+            font-size: 1em;
+        }
+
+        .results-table tr:last-child td {
+            border-bottom: none;
+        }
+
         .warning {
             background: linear-gradient(135deg, #f39c12, #e67e22);
             color: white;
@@ -364,6 +386,27 @@
                             <div class="factor-value" id="factorBResult">-</div>
                         </div>
                     </div>
+
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Material Type</td><td id="tableMaterial">-</td><td>-</td></tr>
+                            <tr><td>Outside Diameter (OD)</td><td id="tableOD">-</td><td>mm</td></tr>
+                            <tr><td>Thickness (t)</td><td id="tableThickness">-</td><td>mm</td></tr>
+                            <tr><td>Length (L)</td><td id="tableLength">-</td><td>mm</td></tr>
+                            <tr><td>Temperature</td><td id="tableTemperature">-</td><td>°C</td></tr>
+                            <tr><td>$D/t$ Ratio</td><td id="tableDTRatio">-</td><td>-</td></tr>
+                            <tr><td>$L/D$ Ratio</td><td id="tableLDRatio">-</td><td>-</td></tr>
+                            <tr><td>Factor A</td><td id="tableFactorA">-</td><td>-</td></tr>
+                            <tr><td>Factor B</td><td id="tableFactorB">-</td><td>-</td></tr>
+                        </tbody>
+                    </table>
                </div>
             </div>
 
@@ -381,7 +424,7 @@
 
         // Configuration for the GitHub repository.
         // **IMPORTANT:** Replace these with your actual details.
-        const GITHUB_USER = 'ueapan';
+        const GITHUB_USER = 'Ueapan';
         const GITHUB_REPO = 'Factor-A-B-calculation';
         const GITHUB_BRANCH = 'main'; // Or 'master', or your branch name.
         const GITHUB_DATA_PATH = 'excel_data'; // The folder where your files are.
@@ -512,7 +555,7 @@
                 }
                 
                 if (factors) {
-                    displayResults(factors);
+                    displayResults(materialType, od, th, len, temp, factors);
                 }
             }
         }
@@ -578,16 +621,20 @@
                 return null;
             }
 
-            return interpolate2D(input_ld, input_dt, {
-                x_headers: factorA_Data.ld_headers,
-                y_key: 'dt',
-                rows: factorA_Data.rows
-            });
+            return {
+                factorA: interpolate2D(input_ld, input_dt, {
+                    x_headers: factorA_Data.ld_headers,
+                    y_key: 'dt',
+                    rows: factorA_Data.rows
+                }),
+                dt_ratio: input_dt,
+                ld_ratio: input_ld
+            };
         }
 
         function calculateFactorAB_CS1(od, thickness, length, temperature) {
-            const factorA = calculateFactorA(od, thickness, length);
-            if (factorA === null) return null;
+            const resultA = calculateFactorA(od, thickness, length);
+            if (resultA.factorA === null) return null;
 
             let input_temp_f = (temperature * 9 / 5) + 32;
 
@@ -599,7 +646,7 @@
                 return null;
             }
 
-            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
                 x_headers: factorB_CS1_Data.factorA_headers,
                 y_key: 'temp',
                 rows: factorB_CS1_Data.rows
@@ -607,12 +654,17 @@
 
             if (factorB_raw === null) return null;
 
-            return { factorA, factorB: factorB_raw / 14.223 };
+            return {
+                factorA: resultA.factorA,
+                factorB: factorB_raw / 14.223,
+                dt_ratio: resultA.dt_ratio,
+                ld_ratio: resultA.ld_ratio
+            };
         }
 
         function calculateFactorAB_CS2(od, thickness, length, temperature) {
-            const factorA = calculateFactorA(od, thickness, length);
-            if (factorA === null) return null;
+            const resultA = calculateFactorA(od, thickness, length);
+            if (resultA.factorA === null) return null;
 
             let input_temp_f = (temperature * 9 / 5) + 32;
 
@@ -624,7 +676,7 @@
                 return null;
             }
 
-            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
                 x_headers: factorB_CS2_Data.factorA_headers,
                 y_key: 'temp',
                 rows: factorB_CS2_Data.rows
@@ -632,12 +684,17 @@
 
             if (factorB_raw === null) return null;
 
-            return { factorA, factorB: factorB_raw / 14.223 };
+            return {
+                factorA: resultA.factorA,
+                factorB: factorB_raw / 14.223,
+                dt_ratio: resultA.dt_ratio,
+                ld_ratio: resultA.ld_ratio
+            };
         }
 
         function calculateFactorAB_HA1(od, thickness, length, temperature) {
-            const factorA = calculateFactorA(od, thickness, length);
-            if (factorA === null) return null;
+            const resultA = calculateFactorA(od, thickness, length);
+            if (resultA.factorA === null) return null;
 
             let input_temp_f = (temperature * 9 / 5) + 32;
 
@@ -649,7 +706,7 @@
                 return null;
             }
 
-            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+            const factorB_raw = interpolate2D(resultA.factorA, input_temp_f, {
                 x_headers: factorB_HA1_Data.factorA_headers,
                 y_key: 'temp',
                 rows: factorB_HA1_Data.rows
@@ -657,7 +714,12 @@
             
             if (factorB_raw === null) return null;
 
-            return { factorA, factorB: factorB_raw / 14.223 };
+            return {
+                factorA: resultA.factorA,
+                factorB: factorB_raw / 14.223,
+                dt_ratio: resultA.dt_ratio,
+                ld_ratio: resultA.ld_ratio
+            };
         }
 
         // --- VALIDATION AND DISPLAY ---
@@ -702,10 +764,24 @@
             warning.classList.add('show');
         }
 
-        function displayResults(factors) {
+        function displayResults(materialType, od, th, len, temp, results) {
             document.getElementById('warning').classList.remove('show');
-            document.getElementById('factorAResult').textContent = factors.factorA.toFixed(6);
-            document.getElementById('factorBResult').textContent = factors.factorB.toFixed(6);
+            
+            // Update the main factor cards
+            document.getElementById('factorAResult').textContent = results.factorA.toFixed(6);
+            document.getElementById('factorBResult').textContent = results.factorB.toFixed(6);
+
+            // Update the new results table
+            document.getElementById('tableMaterial').textContent = materialType;
+            document.getElementById('tableOD').textContent = od;
+            document.getElementById('tableThickness').textContent = th;
+            document.getElementById('tableLength').textContent = len;
+            document.getElementById('tableTemperature').textContent = temp;
+            document.getElementById('tableDTRatio').textContent = results.dt_ratio.toFixed(6);
+            document.getElementById('tableLDRatio').textContent = results.ld_ratio.toFixed(6);
+            document.getElementById('tableFactorA').textContent = results.factorA.toFixed(6);
+            document.getElementById('tableFactorB').textContent = results.factorB.toFixed(6);
+
             document.getElementById('results').classList.add('show');
         }
 
