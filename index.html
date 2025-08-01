@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factor A & B Calculator</title>
+    <!-- Library to read XLSX files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 35px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 2.4em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.15em;
+        }
+
+        .calculator-form {
+            padding: 45px;
+        }
+        
+        .data-loader {
+            background: #eef2f7;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 5px solid #1abc9c;
+            text-align: center;
+        }
+
+        .data-loader h2 {
+            margin-bottom: 20px;
+        }
+        
+        #fileStatus {
+            margin-top: 15px;
+            font-style: italic;
+            color: #555;
+        }
+        
+        .input-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 5px solid #3498db;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::before {
+            content: '⚙️';
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 1.05em;
+            transition: all 0.3s ease;
+            background: white;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
+            transform: translateY(-1px);
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"></polyline></svg>');
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 45px;
+        }
+
+        .material-info {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .calculate-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 18px 50px;
+            font-size: 1.2em;
+            font-weight: 700;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin: 30px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .calculate-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .calculate-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(231, 76, 60, 0.4);
+        }
+        
+        .results {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            border-radius: 12px;
+            padding: 35px;
+            margin-top: 30px;
+            display: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .results.show {
+            display: block;
+            animation: slideUp 0.5s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .results-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .results h3 {
+            font-size: 1.8em;
+            margin-bottom: 25px;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .factor-results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 25px;
+        }
+        
+        .factor-card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 25px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .factor-label {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .factor-value {
+            font-size: 2.2em;
+            font-weight: 900;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .warning {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 25px;
+            display: none;
+            position: relative;
+        }
+
+        .warning.show {
+            display: block;
+            animation: pulse 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(0.95); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .warning-icon {
+            font-size: 1.2em;
+            margin-right: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+            .factor-results {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <h1>Factor A & B Calculator</h1>
+                <p>Calculate factors based on material properties and dimensions</p>
+            </div>
+        </div>
+
+        <form class="calculator-form" id="calculatorForm">
+            <div class="data-loader">
+                <h2>Data Status</h2>
+                <p id="fileStatus">Please select a material type to load data.</p>
+            </div>
+
+            <div class="input-section">
+                <h2 class="section-title">Input Parameters</h2>
+                
+                <div class="input-grid">
+                    <div class="input-group">
+                       <label for="materialType">Material Type</label>
+                        <select id="materialType" required>
+                            <option value="">Select Material Type</option>
+                            <option value="CS-1">CS-1 - Carbon Steel Grade 1</option>
+                            <option value="CS-2">CS-2 - Carbon Steel Grade 2</option>
+                            <option value="HA-1">HA-1 - High Alloy Grade 1</option>
+                       </select>
+                        <div class="material-info" id="materialInfo"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="outsideDiameter">Outside Diameter (OD) (mm)</label>
+                        <input type="number" id="outsideDiameter" step="0.001" placeholder="Enter OD" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="thickness">Thickness (t) (mm)</label>
+                        <input type="number" id="thickness" step="0.001" placeholder="Enter thickness" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="length">Length (L) (mm)</label>
+                        <input type="number" id="length" step="0.001" placeholder="Enter length" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="temperature">Temperature (°C)</label>
+                        <input type="number" id="temperature" step="0.1" placeholder="Enter temperature" required>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="calculate-btn" id="calculateBtn" disabled>Calculate Factor A & B</button>
+
+            <div class="results" id="results">
+                <div class="results-content">
+                    <h3>Calculation Results</h3>
+                    
+                    <div class="factor-results">
+                        <div class="factor-card">
+                            <div class="factor-label">Factor A</div>
+                            <div class="factor-value" id="factorAResult">-</div>
+                        </div>
+                        <div class="factor-card">
+                            <div class="factor-label">Factor B</div>
+                            <div class="factor-value" id="factorBResult">-</div>
+                        </div>
+                    </div>
+               </div>
+            </div>
+
+            <div class="warning" id="warning">
+                <span class="warning-icon">⚠️</span>
+                <strong>Warning:</strong> <span id="warningText"></span>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // --- GLOBAL DATA STORE ---
+        // This is where you will store the parsed data from the Excel files.
+        let factorA_Data, factorB_CS1_Data, factorB_CS2_Data, factorB_HA1_Data;
+
+        // Configuration for the GitHub repository.
+        // **IMPORTANT:** Replace these with your actual details.
+        const GITHUB_USER = 'your-username';
+        const GITHUB_REPO = 'your-repository';
+        const GITHUB_BRANCH = 'main'; // Or 'master', or your branch name.
+        const GITHUB_DATA_PATH = 'excel_data'; // The folder where your files are.
+        const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('materialType').addEventListener('change', async function() {
+            // This function is now async because we are using fetch.
+            updateMaterialInfo();
+            const materialType = this.value;
+            // Only try to load data if a material is actually selected.
+            if (materialType) {
+                await loadDataForMaterial(materialType);
+            }
+        });
+
+        document.getElementById('calculatorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            calculateFactors();
+        });
+
+        // --- DATA LOADING AND PARSING FUNCTIONS ---
+        // This function now replaces the file input listener.
+        async function loadDataForMaterial(materialType) {
+            const fileStatus = document.getElementById('fileStatus');
+            const calculateBtn = document.getElementById('calculateBtn');
+            calculateBtn.disabled = true;
+            fileStatus.textContent = 'Loading data... Please wait.';
+
+            const fileA_url = `${GITHUB_RAW_URL}/Factor A.xlsx`;
+            const fileB_url = `${GITHUB_RAW_URL}/Factor B-${materialType}.xlsx`;
+
+            try {
+                const [responseA, responseB] = await Promise.all([
+                    fetch(fileA_url),
+                    fetch(fileB_url)
+                ]);
+
+                if (!responseA.ok || !responseB.ok) {
+                    throw new Error(`Failed to load one or more files from GitHub. Status: ${responseA.status}, ${responseB.status}`);
+                }
+
+                const [arrayBufferA, arrayBufferB] = await Promise.all([
+                    responseA.arrayBuffer(),
+                    responseB.arrayBuffer()
+                ]);
+
+                // Parse the Factor A file once.
+                if (!factorA_Data) {
+                    const workbookA = XLSX.read(new Uint8Array(arrayBufferA), { type: 'array' });
+                    factorA_Data = parseFactorAData(workbookA);
+                }
+
+                // Parse the specific Factor B file based on material.
+                const workbookB = XLSX.read(new Uint8Array(arrayBufferB), { type: 'array' });
+                if (materialType === 'CS-1') {
+                    factorB_CS1_Data = parseFactorBData(workbookB);
+                } else if (materialType === 'CS-2') {
+                    factorB_CS2_Data = parseFactorBData(workbookB);
+                } else if (materialType === 'HA-1') {
+                    factorB_HA1_Data = parseFactorBData(workbookB);
+                }
+
+                fileStatus.innerHTML = `Data for <strong>${materialType}</strong> loaded. Ready to calculate.`;
+                fileStatus.style.color = '#27ae60';
+                calculateBtn.disabled = false;
+            } catch (error) {
+                console.error('Error fetching or parsing data:', error);
+                fileStatus.textContent = `Error loading data for ${materialType}. Please check the console.`;
+                fileStatus.style.color = '#e74c3c';
+            }
+        }
+        
+        function parseFactorAData(workbook) {
+            const sheet = workbook.Sheets[workbook.SheetNames[1]]; // Assuming Sheet 2
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const ld_headers = json[0].slice(1).map(h => parseFloat(h));
+            const rows = json.slice(1).map(row => ({
+                dt: parseFloat(row[0]),
+                values: row.slice(1).map(v => parseFloat(v))
+            }));
+            return { ld_headers, rows };
+        }
+
+        function parseFactorBData(workbook) {
+            const sheet = workbook.Sheets[workbook.SheetNames[0]]; // Assuming Sheet 1
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const factorA_headers = json[0].slice(1).map(h => parseFloat(h));
+            const rows = json.slice(1).map(row => ({
+                temp: parseFloat(row[0]),
+                values: row.slice(1).map(v => parseFloat(v))
+            }));
+            return { factorA_headers, rows };
+        }
+
+        // --- UI FUNCTIONS ---
+        function updateMaterialInfo() {
+            const materialType = document.getElementById('materialType').value;
+            const infoElement = document.getElementById('materialInfo');
+            const materialInfos = {
+                'CS-1': 'Standard carbon steel for general applications',
+                'CS-2': 'Enhanced carbon steel for high-stress applications',
+                'HA-1': 'High alloy steel for extreme conditions'
+            };
+            infoElement.textContent = materialInfos[materialType] || '';
+        }
+
+        // --- MAIN CALCULATION CONTROLLER ---
+        function calculateFactors() {
+            const materialType = document.getElementById('materialType').value;
+            const od = parseFloat(document.getElementById('outsideDiameter').value);
+            const th = parseFloat(document.getElementById('thickness').value);
+            const len = parseFloat(document.getElementById('length').value);
+            const temp = parseFloat(document.getElementById('temperature').value);
+
+            if (validateInputs(materialType, od, th, len, temp)) {
+                let factors;
+                if (materialType === 'CS-1') {
+                    factors = calculateFactorAB_CS1(od, th, len, temp);
+                } else if (materialType === 'CS-2') {
+                    factors = calculateFactorAB_CS2(od, th, len, temp);
+                } else if (materialType === 'HA-1') {
+                    factors = calculateFactorAB_HA1(od, th, len, temp);
+                } else {
+                    showWarning(`Calculation for material type '${materialType}' is not implemented.`);
+                    document.getElementById('results').classList.remove('show');
+                    return;
+                }
+                
+                if (factors) {
+                    displayResults(factors);
+                }
+            }
+        }
+
+        // --- CORE INTERPOLATION LOGIC ---
+        function linearInterpolate(x, xp, fp) {
+            if (x <= xp[0]) return fp[0];
+            if (x >= xp[xp.length - 1]) return fp[xp.length - 1];
+            let i = 1;
+            while (xp[i] < x) i++;
+            const x1 = xp[i - 1], y1 = fp[i - 1], x2 = xp[i], y2 = fp[i];
+            return y1 + (y2 - y1) * ((x - x1) / (x2 - x1));
+        }
+
+        function interpolate2D(x, y, data) {
+            const { x_headers, y_key, rows } = data;
+            
+            // Find the two rows to interpolate between based on the y-value
+            const rowsSorted = [...rows].sort((a, b) => a[y_key] - b[y_key]);
+            
+            let y_upper_row = rowsSorted.find(row => row[y_key] >= y);
+            let y_lower_row = rowsSorted.slice().reverse().find(row => row[y_key] <= y);
+            
+            if (!y_upper_row || !y_lower_row) {
+                console.error("Could not find interpolation bounds for Y-value.");
+                return null;
+            }
+
+            const y1 = y_lower_row[y_key];
+            const y2 = y_upper_row[y_key];
+
+            // If the y-value is exactly one of the data points, no need for vertical interpolation
+            if (y1 === y2 || y1 === y) {
+                return linearInterpolate(x, x_headers, y_lower_row.values);
+            }
+            if (y2 === y) {
+                return linearInterpolate(x, x_headers, y_upper_row.values);
+            }
+
+            // Interpolate the values for each x_header based on the y-value
+            const interpolated_row_values = x_headers.map((_, i) => {
+                const val1 = y_lower_row.values[i];
+                const val2 = y_upper_row.values[i];
+                return val1 + (val2 - val1) * ((y - y1) / (y2 - y1));
+            });
+
+            // Perform the final horizontal interpolation on the new row of values
+            return linearInterpolate(x, x_headers, interpolated_row_values);
+        }
+
+        // --- MATERIAL-SPECIFIC CALCULATION FUNCTIONS ---
+
+        function calculateFactorA(od, thickness, length) {
+            let input_dt = od / thickness;
+            let input_ld = length / od;
+            
+            if (input_ld < 0.05) input_ld = 0.05;
+            if (input_ld > 50) input_ld = 50;
+
+            // Ensure the data exists before trying to interpolate
+            if (!factorA_Data) {
+                showWarning('Factor A data is not loaded.');
+                return null;
+            }
+
+            return interpolate2D(input_ld, input_dt, {
+                x_headers: factorA_Data.ld_headers,
+                y_key: 'dt',
+                rows: factorA_Data.rows
+            });
+        }
+
+        function calculateFactorAB_CS1(od, thickness, length, temperature) {
+            const factorA = calculateFactorA(od, thickness, length);
+            if (factorA === null) return null;
+
+            let input_temp_f = (temperature * 9 / 5) + 32;
+
+            if (input_temp_f < 300) input_temp_f = 300;
+            if (input_temp_f > 900) input_temp_f = 900;
+            
+            if (!factorB_CS1_Data) {
+                showWarning('Factor B (CS-1) data is not loaded.');
+                return null;
+            }
+
+            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+                x_headers: factorB_CS1_Data.factorA_headers,
+                y_key: 'temp',
+                rows: factorB_CS1_Data.rows
+            });
+
+            if (factorB_raw === null) return null;
+
+            return { factorA, factorB: factorB_raw / 14.223 };
+        }
+
+        function calculateFactorAB_CS2(od, thickness, length, temperature) {
+            const factorA = calculateFactorA(od, thickness, length);
+            if (factorA === null) return null;
+
+            let input_temp_f = (temperature * 9 / 5) + 32;
+
+            if (input_temp_f < 300) input_temp_f = 300;
+            if (input_temp_f > 900) input_temp_f = 900;
+            
+            if (!factorB_CS2_Data) {
+                showWarning('Factor B (CS-2) data is not loaded.');
+                return null;
+            }
+
+            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+                x_headers: factorB_CS2_Data.factorA_headers,
+                y_key: 'temp',
+                rows: factorB_CS2_Data.rows
+            });
+
+            if (factorB_raw === null) return null;
+
+            return { factorA, factorB: factorB_raw / 14.223 };
+        }
+
+        function calculateFactorAB_HA1(od, thickness, length, temperature) {
+            const factorA = calculateFactorA(od, thickness, length);
+            if (factorA === null) return null;
+
+            let input_temp_f = (temperature * 9 / 5) + 32;
+
+            if (input_temp_f < 100) input_temp_f = 100;
+            if (input_temp_f > 1500) input_temp_f = 1500;
+            
+            if (!factorB_HA1_Data) {
+                showWarning('Factor B (HA-1) data is not loaded.');
+                return null;
+            }
+
+            const factorB_raw = interpolate2D(factorA, input_temp_f, {
+                x_headers: factorB_HA1_Data.factorA_headers,
+                y_key: 'temp',
+                rows: factorB_HA1_Data.rows
+            });
+            
+            if (factorB_raw === null) return null;
+
+            return { factorA, factorB: factorB_raw / 14.223 };
+        }
+
+        // --- VALIDATION AND DISPLAY ---
+        function validateInputs(materialType, od, thickness, length, temperature) {
+            let isValid = true;
+            let warningMessage = '';
+
+            if (!materialType) {
+                warningMessage = 'Please select a material type.';
+                isValid = false;
+            } else if (od <= 0) {
+                warningMessage = 'Outside diameter must be greater than 0.';
+                isValid = false;
+            } else if (thickness <= 0) {
+                warningMessage = 'Thickness must be greater than 0.';
+                isValid = false;
+            } else if (thickness >= od / 2) {
+                warningMessage = 'Thickness must be less than half the outside diameter.';
+                isValid = false;
+            } else if (length <= 0) {
+                warningMessage = 'Length must be greater than 0.';
+                isValid = false;
+            } else if (isNaN(temperature)) {
+                warningMessage = 'Please enter a valid temperature.';
+                isValid = false;
+            }
+
+            if (!isValid) {
+                showWarning(warningMessage);
+                document.getElementById('results').classList.remove('show');
+            } else {
+                document.getElementById('warning').classList.remove('show');
+            }
+
+            return isValid;
+        }
+        
+        function showWarning(message) {
+            const warning = document.getElementById('warning');
+            const warningText = document.getElementById('warningText');
+            warningText.textContent = message;
+            warning.classList.add('show');
+        }
+
+        function displayResults(factors) {
+            document.getElementById('warning').classList.remove('show');
+            document.getElementById('factorAResult').textContent = factors.factorA.toFixed(6);
+            document.getElementById('factorBResult').textContent = factors.factorB.toFixed(6);
+            document.getElementById('results').classList.add('show');
+        }
+
+        // Initialize UI
+        updateMaterialInfo();
+    </script>
+</body>
+</html>
