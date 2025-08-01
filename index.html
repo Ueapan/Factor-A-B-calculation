@@ -485,17 +485,26 @@
                 // Parse the Factor A file once.
                 if (!factorA_Data) {
                     const workbookA = XLSX.read(new Uint8Array(arrayBufferA), { type: 'array' });
-                    factorA_Data = parseFactorAData(workbookA);
+                    // Fix: Added try-catch for parsing to handle invalid file content
+                    try {
+                        factorA_Data = parseFactorAData(workbookA);
+                    } catch (parseError) {
+                        throw new Error(`Error parsing Factor A.xlsx: ${parseError.message}`);
+                    }
                 }
 
                 // Parse the specific Factor B file based on material.
                 const workbookB = XLSX.read(new Uint8Array(arrayBufferB), { type: 'array' });
-                if (materialType === 'CS-1') {
-                    factorB_CS1_Data = parseFactorBData(workbookB);
-                } else if (materialType === 'CS-2') {
-                    factorB_CS2_Data = parseFactorBData(workbookB);
-                } else if (materialType === 'HA-1') {
-                    factorB_HA1_Data = parseFactorBData(workbookB);
+                try {
+                    if (materialType === 'CS-1') {
+                        factorB_CS1_Data = parseFactorBData(workbookB);
+                    } else if (materialType === 'CS-2') {
+                        factorB_CS2_Data = parseFactorBData(workbookB);
+                    } else if (materialType === 'HA-1') {
+                        factorB_HA1_Data = parseFactorBData(workbookB);
+                    }
+                } catch (parseError) {
+                    throw new Error(`Error parsing Factor B-${materialType}.xlsx: ${parseError.message}`);
                 }
 
                 fileStatus.innerHTML = `Data for <strong>${materialType}</strong> loaded. Ready to calculate.`;
@@ -503,14 +512,18 @@
                 calculateBtn.disabled = false;
             } catch (error) {
                 console.error('Error fetching or parsing data:', error);
-                fileStatus.textContent = `Error loading data for ${materialType}. See console for details.`;
+                fileStatus.textContent = `Error loading data for ${materialType}: ${error.message}`;
                 fileStatus.style.color = '#e74c3c';
             }
         }
         
+        // --- FIX: Added a check for empty or invalid data array. ---
         function parseFactorAData(workbook) {
             const sheet = workbook.Sheets[workbook.SheetNames[1]]; // Assuming Sheet 2
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!Array.isArray(json) || json.length < 2) {
+                throw new Error('Parsed data is empty or malformed. Expecting at least two rows of data.');
+            }
             const ld_headers = json[0].slice(1).map(h => parseFloat(h));
             const rows = json.slice(1).map(row => ({
                 dt: parseFloat(row[0]),
@@ -519,9 +532,13 @@
             return { ld_headers, rows };
         }
 
+        // --- FIX: Added a check for empty or invalid data array. ---
         function parseFactorBData(workbook) {
             const sheet = workbook.Sheets[workbook.SheetNames[0]]; // Assuming Sheet 1
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!Array.isArray(json) || json.length < 2) {
+                throw new Error('Parsed data is empty or malformed. Expecting at least two rows of data.');
+            }
             const factorA_headers = json[0].slice(1).map(h => parseFloat(h));
             const rows = json.slice(1).map(row => ({
                 temp: parseFloat(row[0]),
